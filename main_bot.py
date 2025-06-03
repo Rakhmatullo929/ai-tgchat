@@ -137,13 +137,12 @@ class SmartGroupBot:
     async def stats_command(self, update, context):
         """Команда /stats для статистики чата"""
         try:
-            from database import SessionLocal
-            from models import ChatInteraction
+            from models import db_manager, ChatInteraction
             from sqlalchemy import func
             
             chat_id = str(update.effective_chat.id)
             
-            with SessionLocal() as db:
+            with db_manager.get_session() as db:
                 # Получаем статистику для текущего чата
                 total_messages = db.query(ChatInteraction).filter(
                     ChatInteraction.chat_id == chat_id

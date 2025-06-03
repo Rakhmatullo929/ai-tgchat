@@ -1,5 +1,3 @@
-version: '3.8'
-
 services:
   smartgroupbot:
     build: .
@@ -9,12 +7,18 @@ services:
       - TELEGRAM_BOT_TOKEN=${TELEGRAM_BOT_TOKEN}
       - OPENAI_API_KEY=${OPENAI_API_KEY}
       - DATABASE_URL=sqlite:///data/bot_database.db
-      - BOT_NAME=SmartGroupBot
-      - RESPONSE_FREQUENCY=5
-      - LOG_LEVEL=INFO
+      - BOT_NAME=${BOT_NAME:-SmartGroupBot}
+      - BOT_PERSONALITY=${BOT_PERSONALITY:-Дружелюбный и умный помощник в групповых чатах}
+      - RESPONSE_FREQUENCY=${RESPONSE_FREQUENCY:-2}
+      - MIN_CONTEXT_MESSAGES=${MIN_CONTEXT_MESSAGES:-2}
+      - MAX_CONTEXT_MESSAGES=${MAX_CONTEXT_MESSAGES:-10}
+      - LOG_LEVEL=${LOG_LEVEL:-INFO}
+      - PYTHONPATH=/app
+      - PYTHONUNBUFFERED=1
     volumes:
       - ./data:/app/data
-      - ./bot.log:/app/bot.log
+      - ./logs:/app/logs
+      - ./smart_bot.log:/app/smart_bot.log
     ports:
       - "5000:5000"
     healthcheck:
@@ -22,6 +26,7 @@ services:
       interval: 30s
       timeout: 10s
       retries: 3
+      start_period: 40s
     logging:
       driver: "json-file"
       options:
