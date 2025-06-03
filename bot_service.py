@@ -85,79 +85,77 @@ class BotService:
         username: str = None
     ) -> Optional[str]:
         """
-        Обрабатывает входящее сообщение и возвращает ответ бота (если нужен)
-        
-        Returns:
-            str: Ответ бота или None, если отвечать не нужно
+        Обрабатывает входящее сообщение и решает, нужно ли отвечать
         """
         try:
-            logger.info(f"📩 Обработка сообщения в чате {chat_id}: {message_text[:50]}...")
+            # Валидация входных данных
+            if not chat_id or not message_text:
+                logger.warning("⚠️ Некорректные данные сообщения")
+                return None
+                
+            # Ограничиваем длину сообщения
+            if len(message_text) > 4000:
+                message_text = message_text[:4000] + "..."
+                logger.info("✂️ Обрезано длинное сообщение")
             
             # Добавляем сообщение в буфер
             self.message_buffer.add_message(chat_id, message_text, is_bot=False)
             
-            # Получаем контекст последних сообщений
-            context_messages = self.message_buffer.get_recent_messages(
-                chat_id, config.max_context_messages
-            )
+            # Получаем историю сообщений для анализа
+            context_messages = self.message_buffer.get_recent_messages(chat_id, config.max_context_messages)
             
             if len(context_messages) < config.min_context_messages:
-                logger.info(f"⏳ Недостаточно сообщений для анализа контекста ({len(context_messages)} < {config.min_context_messages})")
+                logger.debug(f"⏳ Недостаточно контекста для анализа ({len(context_messages)}/{config.min_context_messages})")
                 return None
             
             # Проверяем частоту ответов
             if not self.message_buffer.should_respond_by_frequency(chat_id):
-                logger.info("🔇 Пропускаем ответ по частоте")
-                await self._save_interaction(
-                    chat_id, chat_title, context_messages, 
-                    response_generated=False
-                )
+                logger.debug("⏭️ Пропуск - частота ответов")
                 return None
             
-            # Анализируем контекст и генерируем ответ
-            ai_result = await ai_service.analyze_context_and_generate_response(
-                context_messages, chat_title
-            )
+            logger.info(f"🤔 Анализируем контекст в '{chat_title}' ({len(context_messages)} сообщений)")
             
-            logger.info(f"🤖 AI анализ: {ai_result}")
-            
-            # Проверяем, решил ли AI отвечать
-            should_respond = ai_result.get('should_respond', False)
-            bot_response = ai_result.get('response')
-            
-            if should_respond and bot_response:
-                # Добавляем ответ бота в буфер
-                self.message_buffer.add_message(chat_id, bot_response, is_bot=True)
-                
-                # Сохраняем взаимодействие в БД
-                await self._save_interaction(
-                    chat_id=chat_id,
-                    chat_title=chat_title,
-                    context_messages=context_messages,
-                    detected_topic=ai_result.get('detected_topic'),
-                    sentiment=ai_result.get('sentiment'),
-                    bot_response=bot_response,
-                    response_generated=True
+            # Анализируем контекст с таймаутом
+            ai_result = None
+            try:
+                ai_result = await asyncio.wait_for(
+                    ai_service.analyze_context_and_generate_response(context_messages, chat_title),
+                    timeout=15  # Таймаут 15 секунд
                 )
-                
-                logger.info(f"✅ Генерируем ответ: {bot_response[:50]}...")
-                return bot_response
-            else:
-                # Сохраняем взаимодействие без ответа
-                await self._save_interaction(
-                    chat_id=chat_id,
-                    chat_title=chat_title,
-                    context_messages=context_messages,
-                    detected_topic=ai_result.get('detected_topic'),
-                    sentiment=ai_result.get('sentiment'),
-                    response_generated=False
-                )
-                
-                logger.info("🤐 AI решил не отвечать")
+            except asyncio.TimeoutError:
+                logger.warning("⏰ Таймаут AI анализа, используем fallback")
+                ai_result = {"should_respond": True, "response": None}
+            except Exception as e:
+                logger.error(f"❌ Ошибка AI анализа: {e}")
+                ai_result = {"should_respond": True, "response": None}
+            
+            # Проверяем результат
+            if not ai_result or not isinstance(ai_result, dict):
+                logger.warning("⚠️ Некорректный результат AI анализа")
                 return None
+                
+            should_respond = ai_result.get("should_respond", False)
+            ai_response = ai_result.get("response", "")
+            detected_topic = ai_result.get("topic", "")
+            sentiment = ai_result.get("sentiment", "")
+            
+            logger.info(f"🎯 AI решение: respond={should_respond}, topic={detected_topic}, sentiment={sentiment}")
+            
+            bot_response = None
+            if should_respond and ai_response:
+                bot_response = ai_response
+                logger.info(f"💬 Генерируем ответ: {bot_response[:100]}...")
+            
+            # Сохраняем взаимодействие асинхронно
+            asyncio.create_task(self._save_interaction(
+                chat_id, chat_title, context_messages, 
+                detected_topic, sentiment, bot_response, bool(bot_response)
+            ))
+            
+            return bot_response
                 
         except Exception as e:
-            logger.error(f"❌ Ошибка обработки сообщения: {e}")
+            logger.error(f"❌ Ошибка обработки сообщения: {e}", exc_info=True)
             return None
     
     async def _save_interaction(

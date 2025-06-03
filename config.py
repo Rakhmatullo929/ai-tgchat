@@ -8,7 +8,7 @@ from pydantic_settings import BaseSettings
 from pydantic import field_validator
 
 # Загружаем переменные окружения
-load_dotenv()
+load_dotenv("config.env")
 
 
 class Config(BaseSettings):

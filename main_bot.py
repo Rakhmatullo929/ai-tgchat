@@ -233,9 +233,20 @@ class SmartGroupBot:
         self.running = False
         
         if self.application:
-            await self.application.updater.stop()
-            await self.application.stop()
-            await self.application.shutdown()
+            try:
+                # Проверяем, запущен ли updater перед остановкой
+                if self.application.updater.running:
+                    await self.application.updater.stop()
+                
+                # Останавливаем приложение если оно запущено
+                if self.application.running:
+                    await self.application.stop()
+                
+                # Всегда делаем shutdown
+                await self.application.shutdown()
+                
+            except Exception as e:
+                logger.warning(f"⚠️ Ошибка при остановке (не критично): {e}")
             
         logger.info("✅ SmartGroupBot остановлен")
 

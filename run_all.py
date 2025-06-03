@@ -1,10 +1,8 @@
 #!/usr/bin/env python3
 """
-Скрипт для запуска всех компонентов SmartGroupBot
+Скрипт для запуска SmartGroupBot с полным функционалом
 """
 import asyncio
-import threading
-import time
 import sys
 import os
 from pathlib import Path
@@ -13,7 +11,7 @@ from pathlib import Path
 current_dir = Path(__file__).parent
 sys.path.insert(0, str(current_dir))
 
-print("🚀 SmartGroupBot - Запуск всех компонентов")
+print("🚀 SmartGroupBot - Запуск с полным функционалом")
 print("=" * 50)
 
 # Настройка логирования
@@ -34,7 +32,7 @@ def check_environment():
     logger.info("🔍 Проверка окружения...")
     
     # Проверяем основные файлы
-    required_files = ['main_bot.py', 'web_dashboard.py', 'config.py', 'models.py']
+    required_files = ['main_bot.py', 'config.py', 'models.py', 'ai_service.py', 'bot_service.py']
     missing_files = []
     
     for file in required_files:
@@ -54,13 +52,6 @@ def check_environment():
         return False
     
     try:
-        import web_dashboard
-        logger.info("✅ web_dashboard модуль загружен")
-    except Exception as e:
-        logger.error(f"❌ Ошибка загрузки web_dashboard: {e}")
-        return False
-    
-    try:
         import main_bot
         logger.info("✅ main_bot модуль загружен")
     except Exception as e:
@@ -68,15 +59,6 @@ def check_environment():
         return False
     
     return True
-
-def run_web_dashboard():
-    """Запускает веб-панель в отдельном потоке"""
-    try:
-        from web_dashboard import app
-        logger.info("🌐 Запуск веб-панели на http://0.0.0.0:5000")
-        app.run(host='0.0.0.0', port=5000, debug=False, use_reloader=False)
-    except Exception as e:
-        logger.error(f"❌ Ошибка веб-панели: {e}")
 
 async def run_bot_async():
     """Запускает бота асинхронно"""
@@ -88,7 +70,7 @@ async def run_bot_async():
         raise
 
 def main():
-    """Главная функция для запуска всех компонентов"""
+    """Главная функция для запуска"""
     try:
         # Проверяем окружение
         if not check_environment():
@@ -96,16 +78,6 @@ def main():
             sys.exit(1)
         
         logger.info("✅ Проверка окружения пройдена")
-        
-        # Запускаем веб-панель в отдельном потоке
-        logger.info("🌐 Запуск веб-панели...")
-        web_thread = threading.Thread(target=run_web_dashboard, daemon=True)
-        web_thread.start()
-        
-        # Даем время веб-серверу запуститься
-        time.sleep(3)
-        
-        logger.info("✅ Веб-панель: http://0.0.0.0:5000")
         logger.info("🤖 Запуск Telegram бота...")
         logger.info("=" * 50)
         
